@@ -1,10 +1,6 @@
 # Welcome to data-processor project
 
-## Useful commands
-
-* `npm run build`   compile typescript to js
-* `npm run watch`   watch for changes and compile
-* `npm run test`    perform the jest unit tests
-* `cdk deploy`      deploy this stack to your default AWS account/region
-* `cdk diff`        compare deployed stack with current state
-* `cdk synth`       emits the synthesized CloudFormation template
+This little project handles data pairs that arrives to its API.
+API Gateway forwards this to a SQS queue.
+Then a Lambda function processes the data pairs from SQS queue.
+Lambda gathers records for a certain time, so it batch processes the requests.
