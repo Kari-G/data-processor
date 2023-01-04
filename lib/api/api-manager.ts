@@ -1,11 +1,11 @@
 import { StackProps } from 'aws-cdk-lib';
 import { AwsIntegration, EndpointType, RestApi } from 'aws-cdk-lib/aws-apigateway';
 import { Role, ServicePrincipal } from 'aws-cdk-lib/aws-iam';
-import { Queue, QueueEncryption } from 'aws-cdk-lib/aws-sqs';
+import { Queue } from 'aws-cdk-lib/aws-sqs';
 import { Construct } from "constructs";
 
 export class ApiManager extends Construct {
-  constructor(scope: Construct, id: string, props?: StackProps) {
+  constructor(scope: Construct, id: string, queue: Queue, props?: StackProps) {
     super(scope, id);
 
     const api = new RestApi(this, "data-processor-api", {
@@ -14,18 +14,14 @@ export class ApiManager extends Construct {
       endpointTypes: [EndpointType.REGIONAL]
     });
 
-    api.root.addMethod("POST", this.getSendMessageIntegration(props), {
+    api.root.addMethod("POST", this.getSendMessageIntegration(queue, props), {
       methodResponses: [{
         statusCode: "200",
       }],
     });
   }
 
-  private getSendMessageIntegration = (props?: StackProps): AwsIntegration => {
-    const queue = new Queue(this, 'DataProcessorQueue', {
-      encryption: QueueEncryption.KMS_MANAGED,
-    });
-
+  private getSendMessageIntegration = (queue: Queue, props?: StackProps): AwsIntegration => {
     const integrationRole = new Role(this, 'integration-role', {
       assumedBy: new ServicePrincipal('apigateway.amazonaws.com'),
     });
