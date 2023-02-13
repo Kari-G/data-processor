@@ -1,26 +1,36 @@
+import Ajv, { JSONSchemaType } from "ajv";
 import { APIGatewayProxyStructuredResultV2, SQSEvent } from "aws-lambda";
+
+const ajv = new Ajv({ allErrors: true });
 
 type DataPair = {
   data1: number;
   data2: number;
 };
 
-const validateData = (dataPair: DataPair): string => {
-  if (
-    Object.keys(dataPair).length !== 2 ||
-    Object.keys(dataPair)[0] !== "data1" ||
-    Object.keys(dataPair)[1] !== "data2"
-  ) {
-    return "Validation error. Please check the required fields for this request.";
+const DATA1_FIELD = "data1";
+const DATA2_FIELD = "data2";
+
+export const processDataSchema: JSONSchemaType<DataPair> = {
+  type: "object",
+  properties: {
+    [DATA1_FIELD]: { type: "number" },
+    [DATA2_FIELD]: { type: "number" },
+  },
+  required: [DATA1_FIELD, DATA2_FIELD],
+  additionalProperties: false,
+};
+
+export const validateSchema = (schema: any, data: any) => {
+  const validate = ajv.compile(schema);
+
+  if (validate(data)) {
+    return true;
   }
 
-  if (
-    typeof dataPair.data1 !== "number" ||
-    typeof dataPair.data2 !== "number"
-  ) {
-    return "Validation error. Values must be numbers in this request.";
-  }
-  return "";
+  console.warn(ajv.errorsText(validate.errors));
+  console.warn(data);
+  return false;
 };
 
 export const handler = async (
@@ -35,16 +45,14 @@ export const handler = async (
     }).map((record) => JSON.parse(record.body));
 
     let validData: any[] = [];
-    parsedBody.forEach((dataPair) => {
-      const validationResult: string = validateData(dataPair);
+    for (const dataPair of parsedBody) {
+      const isDataPairValid: boolean = validateSchema(
+        processDataSchema,
+        dataPair
+      );
 
-      if (!validationResult) {
-        validData.push(dataPair);
-        return;
-      }
-      console.warn(validationResult);
-      console.warn(dataPair);
-    });
+      isDataPairValid && validData.push(dataPair);
+    }
 
     if (validData.length === 0) {
       const warningMessage = "There is no valid data that can be processed.";
