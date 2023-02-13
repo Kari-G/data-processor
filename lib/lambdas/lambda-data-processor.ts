@@ -6,15 +6,17 @@ import { Queue } from "aws-cdk-lib/aws-sqs";
 import { Construct } from "constructs";
 import { join } from "path";
 
+const functionName = "DataProcessorHandler";
+
 export class DataProcessorLambda extends Construct {
   dataProcessor: Function;
   constructor(scope: Construct, id: string, queue: Queue, props?: StackProps) {
     super(scope, id);
 
-    this.dataProcessor = new NodejsFunction(this, "DataProcessorHandler", {
+    this.dataProcessor = new NodejsFunction(this, functionName, {
       runtime: Runtime.NODEJS_18_X,
       entry: join(__dirname, "data-processor.ts"),
-      functionName: "DataProcessorHandlerProd",
+      functionName: functionName + "Prod",
       environment: {
         REGION: props?.env?.region
           ? props.env.region

@@ -1,9 +1,4 @@
-import { APIGatewayProxyResultV2, SQSEvent } from "aws-lambda";
-
-const badRequestResponse: APIGatewayProxyResultV2 = {
-  body: "Request is not valid. Please check the required fields for this request.",
-  statusCode: 400,
-};
+import { APIGatewayProxyStructuredResultV2, SQSEvent } from "aws-lambda";
 
 type DataPair = {
   data1: number;
@@ -13,8 +8,8 @@ type DataPair = {
 const validateData = (dataPair: DataPair): string => {
   if (
     Object.keys(dataPair).length !== 2 ||
-    !dataPair.data1 ||
-    !dataPair.data2
+    Object.keys(dataPair)[0] !== "data1" ||
+    Object.keys(dataPair)[1] !== "data2"
   ) {
     return "Validation error. Please check the required fields for this request.";
   }
@@ -30,32 +25,57 @@ const validateData = (dataPair: DataPair): string => {
 
 export const handler = async (
   event: SQSEvent
-): Promise<APIGatewayProxyResultV2> => {
+): Promise<APIGatewayProxyStructuredResultV2> => {
   try {
-    const dataPair: DataPair = JSON.parse(event.Records[0].body) as DataPair;
+    const parsedBody = event.Records.filter((record) => {
+      if (!record.body) {
+        return false;
+      }
+      return true;
+    }).map((record) => JSON.parse(record.body));
 
-    const validationResult: string = validateData(dataPair);
+    let validData: any[] = [];
+    parsedBody.forEach((dataPair) => {
+      const validationResult: string = validateData(dataPair);
 
-    if (validationResult) {
+      if (!validationResult) {
+        validData.push(dataPair);
+        return;
+      }
       console.warn(validationResult);
-      console.warn(event.Records[0].body);
-      return badRequestResponse;
+      console.warn(dataPair);
+    });
+
+    if (validData.length === 0) {
+      const warningMessage = "There is no valid data that can be processed.";
+      console.warn(warningMessage);
+      return {
+        body: warningMessage,
+        statusCode: 400,
+      };
     }
 
-    console.log("Data pair 👉");
-    console.log(JSON.stringify(dataPair));
+    const dataPairs: DataPair[] = validData as DataPair[];
 
-    if (dataPair.data1 >= dataPair.data2) {
-      console.log("do something");
+    console.log("Data pairs 👉");
+    console.log(JSON.stringify(dataPairs));
+
+    let currentValue: number = 0;
+    dataPairs.forEach((dataPair) => {
+      currentValue = currentValue + dataPair.data1 - dataPair.data2;
+    });
+
+    if (currentValue > 0) {
+      console.log("Do something");
     }
 
     return {
-      body: JSON.stringify({ messages: dataPair }),
+      body: "SQS doesnt care about this message",
       statusCode: 200,
     };
   } catch (error) {
     console.error("Error happened during data processing.");
-    console.error(JSON.stringify(error));
+    console.error(error);
 
     return {
       body: JSON.stringify(error),
