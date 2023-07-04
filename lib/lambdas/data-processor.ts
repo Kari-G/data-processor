@@ -1,3 +1,5 @@
+import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
+import { DynamoDBDocumentClient, PutCommand } from "@aws-sdk/lib-dynamodb";
 import Ajv, { JSONSchemaType } from "ajv";
 import { APIGatewayProxyStructuredResultV2, SQSEvent } from "aws-lambda";
 
@@ -10,6 +12,8 @@ type DataPair = {
 
 const DATA1_FIELD = "data1";
 const DATA2_FIELD = "data2";
+
+const deviceID = "randomDeviceID";
 
 export const processDataSchema: JSONSchemaType<DataPair> = {
   type: "object",
@@ -32,6 +36,12 @@ export const validateSchema = (schema: any, data: any) => {
   console.warn(data);
   return false;
 };
+
+const DDBClient = new DynamoDBClient({
+  region: process.env.AWS_REGION,
+});
+
+const DDBDocClient = DynamoDBDocumentClient.from(DDBClient);
 
 export const handler = async (
   event: SQSEvent
@@ -68,14 +78,41 @@ export const handler = async (
     console.log("Data pairs 👉");
     console.log(JSON.stringify(dataPairs));
 
-    let currentValue: number = 0;
+    let averageDataPair: DataPair = {
+      data1: 0,
+      data2: 0,
+    };
+
     dataPairs.forEach((dataPair) => {
-      currentValue = currentValue + dataPair.data1 - dataPair.data2;
+      averageDataPair.data1 += dataPair.data1;
+      averageDataPair.data2 += dataPair.data2;
     });
 
-    if (currentValue > 0) {
-      console.log("Do something");
-    }
+    averageDataPair = {
+      data1: averageDataPair.data1 / dataPairs.length,
+      data2: averageDataPair.data2 / dataPairs.length,
+    };
+
+    const avgDataPairToPut = {
+      PK: deviceID + "#" + new Date().toISOString(),
+      created: new Date().toISOString(),
+      id: deviceID,
+      ...averageDataPair,
+    };
+
+    console.log("avgDataPairToPut:");
+    console.log(avgDataPairToPut);
+
+    const putCommand = new PutCommand({
+      ConditionExpression: "attribute_not_exists(PK)",
+      Item: avgDataPairToPut,
+      TableName: "Table" + process.env.RELEASE,
+    });
+
+    const putResult = await DDBDocClient.send(putCommand);
+
+    console.log("putResult:");
+    console.log(putResult);
 
     return {
       body: "SQS doesnt care about this message",
